@@ -5,56 +5,94 @@
 
 #include "drv/led_matrix.h"
 
+#include <math.h>
+
 typedef struct lm_context
 {
     uint8_t gpio_pin;
     uint16_t led_count;
-
-    uint16_t width;
-    uint16_t height;
-    bool immediate_render;
-
+    uint8_t red_brightness;
+    uint8_t green_brightness;
+    uint8_t blue_brightness;
+    lm_bus_t bus;
     led_strip_handle_t led_strip;
 } lm_context_t, *lm_context_p;
 
-lm_status_t led_matrix_init(const uint8_t gpio_pin, const uint32_t led_count, lm_context_p* out_matrix)
+lm_status_t led_matrix_init_simple(const uint8_t gpio_pin, const uint16_t led_count, lm_context_p* out_matrix)
 {
-    lm_status_t ret = LM_SUCCESS;
+    return led_matrix_init_user(
+        gpio_pin,
+        led_count,
+        LM_BUS_RMT,
+        NULL,
+        NULL,
+        out_matrix
+    );
+}
+
+lm_status_t led_matrix_init_user(
+    const uint8_t gpio_pin,
+    const uint32_t led_count,
+    const lm_bus_t bus,
+    const led_strip_rmt_config_t* user_rmt_config,
+    const led_strip_spi_config_t* user_spi_config,
+    lm_context_p* out_matrix)
+{
+    lm_status_t ret = LM_OK;
 
     const lm_context_p matrix = calloc(1, sizeof(lm_context_t));
 
     if (matrix == NULL) {
-        ret = LM_OUT_OF_MEMORY;
-        goto __hard_error;
+        LM_FAIL(__hard_error, LM_OUT_OF_MEMORY);
     }
 
     if (gpio_reset_pin(gpio_pin) != ESP_OK) {
-        ret = LM_GPIO_ERROR;
-        goto __hard_error;
+        LM_FAIL(__hard_error, LM_GPIO_ERROR);
     }
 
     if (gpio_set_direction(gpio_pin, GPIO_MODE_OUTPUT) != ESP_OK) {
-        ret = LM_GPIO_ERROR;
-        goto __hard_error;
+        LM_FAIL(__hard_error, LM_GPIO_ERROR);
     }
-
-    const led_strip_config_t ls_cfg = {
-        .led_model = LED_MODEL_WS2812,
-        .max_leds = led_count,
-        .strip_gpio_num = gpio_pin
-    };
 
     matrix->gpio_pin = gpio_pin;
     matrix->led_count = led_count;
+    matrix->bus = bus;
+    matrix->red_brightness = 127;
+    matrix->green_brightness = 127;
+    matrix->blue_brightness = 127;
 
-    const led_strip_rmt_config_t ls_rmt_config = {
-        .resolution_hz = 10 * 1000 * 1000,
-        .flags.with_dma = false
+    const led_strip_config_t ls_cfg = {
+        .led_model = LED_MODEL_WS2812,
+        .max_leds = matrix->led_count,
+        .strip_gpio_num = matrix->gpio_pin
     };
 
-    if (led_strip_new_rmt_device(&ls_cfg, &ls_rmt_config, &matrix->led_strip) != ESP_OK) {
-        ret = LM_RMT_ERROR;
-        goto __hard_error;
+    if (matrix->bus == LM_BUS_RMT) {
+        led_strip_rmt_config_t ls_rmt_config = { 0 };
+
+        if (user_rmt_config != NULL) {
+            ls_rmt_config = *user_rmt_config;
+        } else {
+            ls_rmt_config.resolution_hz = 40 * 1000 * 1000;
+            ls_rmt_config.flags.with_dma = false;
+        }
+
+        if (led_strip_new_rmt_device(&ls_cfg, &ls_rmt_config, &matrix->led_strip) != ESP_OK) {
+            LM_FAIL(__hard_error, LM_BUS_ERROR);
+        }
+    } else if (matrix->bus == LM_BUS_SPI) {
+        led_strip_spi_config_t ls_spi_config = { 0 };
+
+        if (user_spi_config != NULL) {
+            ls_spi_config = *user_spi_config;
+        } else {
+            ls_spi_config.spi_bus = SPI2_HOST;
+            ls_spi_config.flags.with_dma = true;
+        }
+
+        if (led_strip_new_spi_device(&ls_cfg, &ls_spi_config, &matrix->led_strip) != ESP_OK) {
+            LM_FAIL(__hard_error, LM_BUS_ERROR);
+        }
     }
 
     *out_matrix = matrix;
@@ -71,63 +109,18 @@ __hard_error:
     goto __exit;
 }
 
-lm_status_t led_matrix_set_dimensions(const lm_context_p matrix, const uint16_t width, const uint16_t height)
+lm_status_t led_matrix_clear(const lm_context_p matrix)
 {
-    if (width * height > matrix->led_count) {
-        return LM_OUT_OF_RANGE;
-    }
-
-    matrix->width = width;
-    matrix->height = height;
-
-    return LM_SUCCESS;
-}
-
-lm_status_t led_matrix_get_dimensions(const lm_context_p matrix, uint16_t* width, uint16_t* height)
-{
-    lm_status_t ret = LM_SUCCESS;
+    lm_status_t ret = LM_OK;
 
     if (matrix == NULL) {
-        ret = LM_INVALID_ARGUMENT;
-        goto __hard_error;
-    }
-
-    *width = matrix->width;
-    *height = matrix->height;
-
-__exit:
-    return ret;
-
-__hard_error:
-    *width = 0;
-    *height = 0;
-    goto __exit;
-}
-
-lm_status_t led_matrix_set_immediate_render(const lm_context_p matrix, const bool enable)
-{
-    if (matrix == NULL) {
-        return LM_INVALID_ARGUMENT;
-    }
-
-    matrix->immediate_render = enable;
-
-    return LM_SUCCESS;
-}
-
-lm_status_t led_matrix_clear(lm_context_p matrix)
-{
-    if (matrix == NULL) {
-        return LM_INVALID_ARGUMENT;
+        LM_FAIL(__exit, LM_INVALID_ARGUMENT);
     }
 
     led_strip_clear(matrix->led_strip);
 
-    if (matrix->immediate_render) {
-        led_strip_refresh(matrix->led_strip);
-    }
-
-    return LM_SUCCESS;
+__exit:
+    return ret;
 }
 
 lm_status_t led_matrix_set_led(
@@ -137,67 +130,60 @@ lm_status_t led_matrix_set_led(
     const uint8_t g,
     const uint8_t b)
 {
-    lm_status_t ret = LM_SUCCESS;
+    lm_status_t ret = LM_OK;
 
     if (matrix == NULL) {
-        ret = LM_INVALID_ARGUMENT;
-        goto __exit;
+        LM_FAIL(__exit, LM_INVALID_ARGUMENT);
     }
 
     if (idx >= matrix->led_count) {
-        ret = LM_OUT_OF_RANGE;
-        goto __exit;
+        LM_FAIL(__exit, LM_OUT_OF_RANGE);
     }
 
-    led_strip_set_pixel(matrix->led_strip, idx, r, g, b);
-
-    if (matrix->immediate_render) {
-        led_strip_refresh(matrix->led_strip);
-    }
+    led_strip_set_pixel(
+        matrix->led_strip,
+        idx,
+        (uint8_t)(255 * (r * matrix->red_brightness / 255.0)),
+        (uint8_t)(255 * (g * matrix->green_brightness / 255.0)),
+        (uint8_t)(255 * (b * matrix->blue_brightness / 255.0))
+    );
 
 __exit:
     return ret;
 }
 
-lm_status_t led_matrix_set_xy(
+lm_status_t led_matrix_set_global_brightness(
     const lm_context_p matrix,
-    const uint16_t x,
-    const uint16_t y,
-    const uint8_t r,
-    const uint8_t g,
-    const uint8_t b)
+    const uint8_t red_brightness,
+    const uint8_t green_brightness,
+    const uint8_t blue_brightness)
 {
-    lm_status_t ret = LM_SUCCESS;
+    lm_status_t ret = LM_OK;
 
     if (matrix == NULL) {
-        ret = LM_INVALID_ARGUMENT;
-        goto __exit;
+        LM_FAIL(__exit, LM_INVALID_ARGUMENT);
     }
 
-    if (x >= matrix->width || y >= matrix->height) {
-        ret = LM_OUT_OF_RANGE;
-        goto __exit;
-    }
-
-    const uint32_t idx = ((matrix->height - y) * matrix->width) - x - 1;
-    led_strip_set_pixel(matrix->led_strip, idx, r, g, b);
-
-    if (matrix->immediate_render) {
-        led_strip_refresh(matrix->led_strip);
-    }
+    matrix->red_brightness = red_brightness;
+    matrix->green_brightness = green_brightness;
+    matrix->blue_brightness = blue_brightness;
 
 __exit:
     return ret;
 }
 
-lm_status_t led_matrix_render(const lm_context_p matrix)
+lm_status_t led_matrix_flush(const lm_context_p matrix)
 {
+    lm_status_t ret = LM_OK;
+
     if (matrix == NULL) {
-        return LM_INVALID_ARGUMENT;
+        LM_FAIL(__exit, LM_INVALID_ARGUMENT);
     }
 
     led_strip_refresh(matrix->led_strip);
-    return LM_SUCCESS;
+
+__exit:
+    return ret;
 }
 
 void led_matrix_destroy(const lm_context_p matrix)

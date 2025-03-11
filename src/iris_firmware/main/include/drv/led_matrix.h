@@ -3,40 +3,45 @@
 
 #include <stdint.h>
 
-typedef struct lm_context lm_context_t, *lm_context_p;
+#include <led_strip.h>
+
+#define LM_FAIL(jump_to, errcode) \
+    ret = errcode;                \
+    goto jump_to;
+
+typedef struct lm_context lm_context_t;
+typedef struct lm_context *lm_context_p;
 
 typedef enum lm_status
 {
-    LM_SUCCESS          = 0,
+    LM_OK               = 0,
     LM_GENERAL_ERROR    = -1,
     LM_OUT_OF_MEMORY    = -2,
     LM_GPIO_ERROR       = -3,
-    LM_RMT_ERROR        = -4,
+    LM_BUS_ERROR        = -4,
     LM_INVALID_ARGUMENT = -5,
     LM_OUT_OF_RANGE     = -6
 } lm_status_t;
 
-lm_status_t led_matrix_init(
+typedef enum lm_bus
+{
+    LM_BUS_SPI,
+    LM_BUS_RMT
+} lm_bus_t;
+
+lm_status_t led_matrix_init_simple(
     uint8_t gpio_pin,
-    uint32_t led_count,
+    uint16_t led_count,
     lm_context_p* out_matrix
 );
 
-lm_status_t led_matrix_set_dimensions(
-    lm_context_p matrix,
-    uint16_t width,
-    uint16_t height
-);
-
-lm_status_t led_matrix_get_dimensions(
-    lm_context_p matrix,
-    uint16_t* width,
-    uint16_t* height
-);
-
-lm_status_t led_matrix_set_immediate_render(
-    lm_context_p matrix,
-    bool enable
+lm_status_t led_matrix_init_user(
+    uint8_t gpio_pin,
+    uint32_t led_count,
+    lm_bus_t bus,
+    const led_strip_rmt_config_t* user_rmt_config,
+    const led_strip_spi_config_t* user_spi_config,
+    lm_context_p* out_matrix
 );
 
 lm_status_t led_matrix_clear(
@@ -51,16 +56,14 @@ lm_status_t led_matrix_set_led(
     uint8_t b
 );
 
-lm_status_t led_matrix_set_xy(
+lm_status_t led_matrix_set_global_brightness(
     lm_context_p matrix,
-    uint16_t x,
-    uint16_t y,
-    uint8_t r,
-    uint8_t g,
-    uint8_t b
+    uint8_t red_brightness,
+    uint8_t green_brightness,
+    uint8_t blue_brightness
 );
 
-lm_status_t led_matrix_render(
+lm_status_t led_matrix_flush(
     lm_context_p matrix
 );
 
