@@ -55,7 +55,7 @@ lm_status_t led_matrix_init_user(
     matrix->gpio_pin = gpio_pin;
     matrix->led_count = led_count;
     matrix->bus = bus;
-    matrix->brightness = 32;
+    matrix->brightness = LM_DEFAULT_GLOBAL_BRIGHTNESS;
 
     const led_strip_config_t ls_cfg = {
         .led_model = LED_MODEL_WS2812,

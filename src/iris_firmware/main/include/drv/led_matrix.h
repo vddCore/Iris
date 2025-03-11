@@ -5,6 +5,8 @@
 
 #include <led_strip.h>
 
+#define LM_DEFAULT_GLOBAL_BRIGHTNESS 32
+
 #define LM_FAIL(jump_to, errcode) \
     ret = errcode;                \
     goto jump_to;
