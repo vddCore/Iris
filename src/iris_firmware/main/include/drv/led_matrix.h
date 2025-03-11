@@ -58,9 +58,7 @@ lm_status_t led_matrix_set_led(
 
 lm_status_t led_matrix_set_global_brightness(
     lm_context_p matrix,
-    uint8_t red_brightness,
-    uint8_t green_brightness,
-    uint8_t blue_brightness
+    uint8_t brightness
 );
 
 lm_status_t led_matrix_flush(

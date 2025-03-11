@@ -11,6 +11,21 @@ typedef struct flare_config
     uint32_t height;
 } flare_config_t, *flare_config_p;
 
+static void __set_pixel_fast(
+    const flare_renderer_p renderer,
+    const uint32_t x,
+    const uint32_t y,
+    const uint32_t color)
+{
+    led_matrix_set_led(
+        renderer->matrix,
+        (renderer->config->height - y) * renderer->config->width - x - 1,
+        (color & 0x00FF0000) >> 16,
+        (color & 0x0000FF00) >> 8,
+        (color & 0x000000FF) >> 0
+    );
+}
+
 iris_status_t flare_init(
     const lm_context_p matrix,
     const uint32_t width,
@@ -102,13 +117,98 @@ iris_status_t flare_draw_pixel(
         IRIS_FAIL(__exit, IRIS_OUT_OF_RANGE);
     }
 
-    led_matrix_set_led(
-        renderer->matrix,
-        (renderer->config->height - y) * renderer->config->width - x - 1,
-        (color & 0x00FF0000) >> 16,
-        (color & 0x0000FF00) >> 8,
-        (color & 0x000000FF) >> 0
-    );
+    __set_pixel_fast(renderer, x, y, color);
+
+__exit:
+    return ret;
+}
+
+iris_status_t flare_draw_line(
+    const flare_renderer_p renderer,
+    int32_t x0,
+    int32_t y0,
+    const int32_t x1,
+    const int32_t y1,
+    const uint32_t color)
+{
+    iris_status_t ret = IRIS_OK;
+
+    if (renderer == NULL) {
+        IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
+    }
+
+    const int32_t dx = abs(x1 - x0);
+    const int32_t dy = abs(y1 - y0);
+
+    const int sx = (x0 < x1)
+                   ? 1
+                   : -1;
+    const int sy = (y0 < y1)
+                   ? 1
+                   : -1;
+
+    int err = dx - dy;
+
+    while (true) {
+        if ((x0 == x1 && y0 == y1)
+            || x0 < 0
+            || y0 < 0
+            || x0 >= renderer->config->width
+            || y0 >= renderer->config->height) {
+            break;
+        }
+
+        __set_pixel_fast(renderer, x0, y0, color);
+
+        int e2 = err << 1;
+
+        if (e2 > -dy) {
+            err -= dy;
+            x0 += sx;
+        }
+
+        if (e2 < dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+
+__exit:
+    return ret;
+}
+
+iris_status_t flare_draw_rectangle(
+    const flare_renderer_p renderer,
+    const uint32_t x,
+    const uint32_t y,
+    const uint32_t w,
+    const uint32_t h,
+    const uint32_t color,
+    const bool filled)
+{
+    iris_status_t ret = IRIS_OK;
+
+    if (renderer == NULL) {
+        IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
+    }
+
+    if (filled) {
+        for (uint32_t i = 0; i < h; i++) {
+            for (uint32_t j = 0; j < w; j++) {
+                __set_pixel_fast(renderer, x + j, y + i, color);
+            }
+        }
+    } else {
+        for (uint32_t i = 0; i < w; i++) {
+            __set_pixel_fast(renderer, x + i, y, color);
+            __set_pixel_fast(renderer, x + i, y + h - 1, color);
+        }
+
+        for (uint32_t i = 0; i < h; i++) {
+            __set_pixel_fast(renderer, x, y + i, color);
+            __set_pixel_fast(renderer, x + w - 1, y + i, color);
+        }
+    }
 
 __exit:
     return ret;

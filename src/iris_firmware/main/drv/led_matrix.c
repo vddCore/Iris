@@ -11,9 +11,7 @@ typedef struct lm_context
 {
     uint8_t gpio_pin;
     uint16_t led_count;
-    uint8_t red_brightness;
-    uint8_t green_brightness;
-    uint8_t blue_brightness;
+    uint8_t brightness;
     lm_bus_t bus;
     led_strip_handle_t led_strip;
 } lm_context_t, *lm_context_p;
@@ -57,9 +55,7 @@ lm_status_t led_matrix_init_user(
     matrix->gpio_pin = gpio_pin;
     matrix->led_count = led_count;
     matrix->bus = bus;
-    matrix->red_brightness = 127;
-    matrix->green_brightness = 127;
-    matrix->blue_brightness = 127;
+    matrix->brightness = 32;
 
     const led_strip_config_t ls_cfg = {
         .led_model = LED_MODEL_WS2812,
@@ -143,9 +139,9 @@ lm_status_t led_matrix_set_led(
     led_strip_set_pixel(
         matrix->led_strip,
         idx,
-        (uint8_t)(255 * (r * matrix->red_brightness / 255.0)),
-        (uint8_t)(255 * (g * matrix->green_brightness / 255.0)),
-        (uint8_t)(255 * (b * matrix->blue_brightness / 255.0))
+        (r * matrix->brightness) >> 8,
+        (g * matrix->brightness) >> 8,
+        (b * matrix->brightness) >> 8
     );
 
 __exit:
@@ -154,9 +150,7 @@ __exit:
 
 lm_status_t led_matrix_set_global_brightness(
     const lm_context_p matrix,
-    const uint8_t red_brightness,
-    const uint8_t green_brightness,
-    const uint8_t blue_brightness)
+    const uint8_t brightness)
 {
     lm_status_t ret = LM_OK;
 
@@ -164,9 +158,7 @@ lm_status_t led_matrix_set_global_brightness(
         LM_FAIL(__exit, LM_INVALID_ARGUMENT);
     }
 
-    matrix->red_brightness = red_brightness;
-    matrix->green_brightness = green_brightness;
-    matrix->blue_brightness = blue_brightness;
+    matrix->brightness = brightness;
 
 __exit:
     return ret;
