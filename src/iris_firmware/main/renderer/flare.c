@@ -193,11 +193,11 @@ iris_status_t flare_draw_rectangle(
     }
 
     if (x1 < x0 || y1 < y0) {
-        IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT); // Ensure valid coordinates
+        IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
     }
 
-    uint32_t w = x1 - x0 + 1;
-    uint32_t h = y1 - y0 + 1;
+    const uint32_t w = x1 - x0 + 1;
+    const uint32_t h = y1 - y0 + 1;
 
     if (filled) {
         for (uint32_t i = 0; i < h; i++) {

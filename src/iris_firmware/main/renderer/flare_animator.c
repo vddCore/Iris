@@ -184,7 +184,7 @@ __exit:
     return ret;
 }
 
-void flare_anim_destroy(flare_animator_p animator)
+void flare_anim_destroy(const flare_animator_p animator)
 {
     if (animator != NULL) {
         animator->animation_callback = NULL;
