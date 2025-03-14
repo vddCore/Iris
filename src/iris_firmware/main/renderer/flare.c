@@ -4,9 +4,6 @@
 
 typedef struct flare_config
 {
-    double_t time_step;
-    double_t pixel_scale;
-
     uint32_t width;
     uint32_t height;
 } flare_config_t, *flare_config_p;
@@ -42,17 +39,16 @@ iris_status_t flare_init(
         IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
     }
 
-    flare_config_p config = calloc(1, sizeof(flare_config_t));
+    const flare_config_p config = calloc(1, sizeof(flare_config_t));
     if (config == NULL) {
         IRIS_FAIL(__exit, IRIS_OUT_OF_MEMORY);
     }
     config->width = width;
     config->height = height;
-    config->time_step = FLARE_DEFAULT_TIME_STEP;
-    config->pixel_scale = FLARE_DEFAULT_PIXEL_SCALE;
 
-    flare_renderer_p renderer = calloc(1, sizeof(flare_renderer_t));
+    const flare_renderer_p renderer = calloc(1, sizeof(flare_renderer_t));
     if (renderer == NULL) {
+        free(config);
         IRIS_FAIL(__exit, IRIS_OUT_OF_MEMORY);
     }
     renderer->matrix = matrix;
@@ -67,18 +63,12 @@ __exit:
 iris_status_t flare_configure(
     const flare_renderer_p renderer,
     const uint32_t width,
-    const uint32_t height,
-    const double_t pixel_scale,
-    const double_t time_step)
+    const uint32_t height)
 {
     iris_status_t ret = IRIS_OK;
 
     if (renderer == NULL) {
         IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
-    }
-
-    if (pixel_scale < 0.0 || time_step < 0.0) {
-        IRIS_FAIL(__exit, IRIS_OUT_OF_RANGE);
     }
 
     if (width != 0) {
@@ -89,13 +79,23 @@ iris_status_t flare_configure(
         renderer->config->height = height;
     }
 
-    if (pixel_scale != 0.0) {
-        renderer->config->pixel_scale = pixel_scale;
+__exit:
+    return ret;
+}
+
+iris_status_t flare_get_dimensions(
+    const flare_renderer_p renderer,
+    uint32_t* out_width,
+    uint32_t* out_height)
+{
+    iris_status_t ret = IRIS_OK;
+
+    if (renderer == NULL || out_width == NULL || out_height == NULL) {
+        IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
     }
 
-    if (time_step != 0.0) {
-        renderer->config->time_step = time_step;
-    }
+    *out_width = renderer->config->width;
+    *out_height = renderer->config->height;
 
 __exit:
     return ret;
@@ -160,7 +160,7 @@ iris_status_t flare_draw_line(
 
         __set_pixel_fast(renderer, x0, y0, color);
 
-        int e2 = err << 1;
+        const int e2 = err << 1;
 
         if (e2 > -dy) {
             err -= dy;
@@ -179,10 +179,10 @@ __exit:
 
 iris_status_t flare_draw_rectangle(
     const flare_renderer_p renderer,
-    const uint32_t x,
-    const uint32_t y,
-    const uint32_t w,
-    const uint32_t h,
+    const uint32_t x0,
+    const uint32_t y0,
+    const uint32_t x1,
+    const uint32_t y1,
     const uint32_t color,
     const bool filled)
 {
@@ -192,21 +192,28 @@ iris_status_t flare_draw_rectangle(
         IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT);
     }
 
+    if (x1 < x0 || y1 < y0) {
+        IRIS_FAIL(__exit, IRIS_INVALID_ARGUMENT); // Ensure valid coordinates
+    }
+
+    uint32_t w = x1 - x0 + 1;
+    uint32_t h = y1 - y0 + 1;
+
     if (filled) {
         for (uint32_t i = 0; i < h; i++) {
             for (uint32_t j = 0; j < w; j++) {
-                __set_pixel_fast(renderer, x + j, y + i, color);
+                __set_pixel_fast(renderer, x0 + j, y0 + i, color);
             }
         }
     } else {
         for (uint32_t i = 0; i < w; i++) {
-            __set_pixel_fast(renderer, x + i, y, color);
-            __set_pixel_fast(renderer, x + i, y + h - 1, color);
+            __set_pixel_fast(renderer, x0 + i, y0, color);
+            __set_pixel_fast(renderer, x0 + i, y1, color);
         }
 
-        for (uint32_t i = 0; i < h; i++) {
-            __set_pixel_fast(renderer, x, y + i, color);
-            __set_pixel_fast(renderer, x + w - 1, y + i, color);
+        for (uint32_t i = 1; i < h - 1; i++) {
+            __set_pixel_fast(renderer, x0, y0 + i, color);
+            __set_pixel_fast(renderer, x1, y0 + i, color);
         }
     }
 
@@ -233,7 +240,6 @@ void flare_destroy(const flare_renderer_p renderer)
     if (renderer != NULL) {
         if (renderer->config != NULL) {
             free(renderer->config);
-            renderer->config = NULL;
         }
 
         free(renderer);

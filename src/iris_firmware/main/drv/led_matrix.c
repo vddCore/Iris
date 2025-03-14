@@ -69,7 +69,7 @@ lm_status_t led_matrix_init_user(
         if (user_rmt_config != NULL) {
             ls_rmt_config = *user_rmt_config;
         } else {
-            ls_rmt_config.resolution_hz = 40 * 1000 * 1000;
+            ls_rmt_config.resolution_hz = 10 * 1000 * 1000;
             ls_rmt_config.flags.with_dma = false;
         }
 

@@ -1,6 +1,6 @@
 idf_component_register(
-    SRCS "core/kernel.c"
-    SRCS "drv/led_matrix.c"
-    SRCS "renderer/flare.c"
+    SRC_DIRS "core"
+             "drv"
+             "renderer"
     INCLUDE_DIRS "include"
 )
